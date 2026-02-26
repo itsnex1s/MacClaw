@@ -41,7 +41,8 @@ body {
   -webkit-app-region: drag;
 }
 
-.command-strip input {
+.command-strip input,
+.command-strip button {
   -webkit-app-region: no-drag;
 }
 
@@ -51,8 +52,41 @@ body {
   height: 100%;
 }
 
-.query-input {
+.query-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   width: 100%;
+  min-width: 0;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.selection-chip {
+  flex-shrink: 0;
+  max-width: 42%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 0.2rem 0.5rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+  font-family: inherit;
+  font-size: 0.72rem;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.selection-chip:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.query-input {
+  flex: 1;
+  min-width: 0;
   height: 100%;
   border: none;
   border-radius: 0;
@@ -62,7 +96,7 @@ body {
   font-size: 1.1rem;
   font-weight: 300;
   letter-spacing: -0.01em;
-  padding: 0 2.2rem 0 1rem;
+  padding: 0;
   outline: none;
   caret-color: rgba(255, 255, 255, 0.7);
 }
