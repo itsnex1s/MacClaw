@@ -11,6 +11,7 @@ type PanelLifecycleDeps = {
   client: WsClient;
   settings: AppSettings;
   settingsLoaded: boolean;
+  preserveNextOpenRef: MutableRefObject<boolean>;
   backgroundModeRef: MutableRefObject<boolean>;
   isThinkingRef: MutableRefObject<boolean>;
   streamingTextRef: MutableRefObject<string>;
@@ -24,6 +25,7 @@ export function usePanelLifecycle(deps: PanelLifecycleDeps): void {
     client,
     settings,
     settingsLoaded,
+    preserveNextOpenRef,
     backgroundModeRef,
     isThinkingRef,
     streamingTextRef,
@@ -51,6 +53,10 @@ export function usePanelLifecycle(deps: PanelLifecycleDeps): void {
     // Called every time the panel becomes visible (hotkey show).
     // Clears stale UI, reconnects if the WebSocket died while hidden.
     const onPanelShow = () => {
+      if (preserveNextOpenRef.current) {
+        inputRef.current?.focus();
+        return;
+      }
       // If restoring from background mode, keep the response.
       if (backgroundModeRef.current || justRestored) {
         inputRef.current?.focus();
@@ -175,5 +181,16 @@ export function usePanelLifecycle(deps: PanelLifecycleDeps): void {
       unlisteners.forEach((fn) => fn());
       if (restoreTimer) clearTimeout(restoreTimer);
     };
-  }, [client, settings, settingsLoaded]);
+  }, [
+    backgroundModeRef,
+    clearConversation,
+    client,
+    inputRef,
+    isThinkingRef,
+    preserveNextOpenRef,
+    setBackgroundMode,
+    settings,
+    settingsLoaded,
+    streamingTextRef,
+  ]);
 }

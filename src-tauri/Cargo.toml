@@ -13,6 +13,9 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-global-shortcut = "2"
 window-vibrancy = "0.5"
+accessibility-sys = "0.2"
+core-foundation = "0.10"
+core-graphics = "0.24"
 dirs = "6"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = ["NSScreen", "objc2-core-foundation"] }

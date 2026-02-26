@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type KeyboardEvent,
 } from "react";
 import { CommandHints } from "./components/CommandHints";
 import { CommandInput } from "./components/CommandInput";
@@ -11,11 +12,17 @@ import { ConnectForm } from "./components/ConnectForm";
 import { ResponsePanel } from "./components/ResponsePanel";
 import { SettingsForm } from "./components/SettingsForm";
 import type { PanelMode } from "./constants/panel";
+import { resolveSubmitAction } from "./features/panel/submit-resolver";
+import {
+  DEFAULT_INPUT_PLACEHOLDER,
+  type SelectionContext,
+} from "./features/panel/types";
+import { useSelectionPrefill } from "./features/panel/useSelectionPrefill";
 import { useCommandInput } from "./hooks/useCommandInput";
 import { useWsClient } from "./hooks/useWsClient";
 import { usePanelLifecycle } from "./hooks/usePanelLifecycle";
 import { usePanelResize } from "./hooks/usePanelResize";
-import { parsePanelCommand, safeTrim } from "./lib/commands";
+import { safeTrim } from "./lib/commands";
 import { clearMediaCache } from "./lib/media-cache";
 import {
   DEFAULT_SETTINGS,
@@ -24,9 +31,32 @@ import {
   type AppSettings,
 } from "./lib/settings";
 
+function resolvePanelMode(params: {
+  showHints: boolean;
+  showConnectForm: boolean;
+  showSettingsForm: boolean;
+  activeQuery: string;
+}): PanelMode {
+  if (params.showHints) {
+    return "hints";
+  }
+  if (params.showConnectForm) {
+    return "connect";
+  }
+  if (params.showSettingsForm) {
+    return "settings";
+  }
+  return params.activeQuery.length > 0 ? "response" : "compact";
+}
+
 export function App() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [inputPlaceholder, setInputPlaceholder] = useState(
+    DEFAULT_INPUT_PLACEHOLDER,
+  );
+  const [selectionContext, setSelectionContext] =
+    useState<SelectionContext | null>(null);
 
   const [activeQuery, setActiveQuery] = useState("");
   const [showConnectForm, setShowConnectForm] = useState(false);
@@ -40,6 +70,7 @@ export function App() {
 
   const [backgroundMode, setBackgroundMode] = useState(false);
   const backgroundModeRef = useRef(false);
+  const preserveNextOpenRef = useRef(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const responsePanelRef = useRef<HTMLElement>(null);
@@ -79,24 +110,31 @@ export function App() {
     });
   }, []);
 
-  const clearConversation = useCallback(() => {
-    setInput("");
+  const resetResponseState = useCallback(() => {
     setActiveQuery("");
     setAssistantText("");
     setStreamingText("");
     streamingTextRef.current = "";
     setIsThinking(false);
     isThinkingRef.current = false;
+  }, [setAssistantText, setStreamingText, setIsThinking, isThinkingRef, streamingTextRef]);
+
+  const clearConversation = useCallback(() => {
+    setInput("");
+    setInputPlaceholder(DEFAULT_INPUT_PLACEHOLDER);
+    setSelectionContext(null);
+    resetResponseState();
     setShowConnectForm(false);
     setShowSettingsForm(false);
     setHintIndex(0);
     clearMediaCache();
-  }, []);
+  }, [resetResponseState, setHintIndex, setInput]);
 
   usePanelLifecycle({
     client,
     settings,
     settingsLoaded,
+    preserveNextOpenRef,
     backgroundModeRef,
     isThinkingRef,
     streamingTextRef,
@@ -105,17 +143,28 @@ export function App() {
     setBackgroundMode,
   });
 
-  // Which panel mode?
-  const panelMode: PanelMode = showHints
-    ? "hints"
-    : showConnectForm
-      ? "connect"
-      : showSettingsForm
-        ? "settings"
-        : activeQuery.length > 0
-          ? "response"
-          : "compact";
+  const handleSelectionPrefillStart = useCallback(() => {
+    setShowConnectForm(false);
+    setShowSettingsForm(false);
+    resetResponseState();
+  }, [resetResponseState]);
 
+  useSelectionPrefill({
+    inputRef,
+    preserveNextOpenRef,
+    onPrefillStart: handleSelectionPrefillStart,
+    setInput,
+    setInputPlaceholder,
+    setSelectionContext,
+  });
+
+  // Which panel mode?
+  const panelMode = resolvePanelMode({
+    showHints,
+    showConnectForm,
+    showSettingsForm,
+    activeQuery,
+  });
   const renderedAnswer = safeTrim(streamingText) || safeTrim(assistantText);
 
   usePanelResize(panelMode, responsePanelRef, renderedAnswer, isThinking);
@@ -153,54 +202,56 @@ export function App() {
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
 
-    const command = parsePanelCommand(input);
-    if (!command) {
+    const rawInput = safeTrim(inputRef.current?.value ?? input);
+    const action = resolveSubmitAction({
+      rawInput,
+      selectionContext,
+      gatewayUrl: settings.gatewayUrl,
+      token: settings.token,
+      connectionState,
+    });
+
+    if (action.kind === "noop") {
       return;
     }
 
     setInput("");
+    setInputPlaceholder(DEFAULT_INPUT_PLACEHOLDER);
 
-    if (command.kind === "connect") {
+    if (action.kind === "open_connect") {
       setConnectUrl(settings.gatewayUrl);
       setConnectToken(settings.token);
       setShowConnectForm(true);
       setShowSettingsForm(false);
-      setActiveQuery("");
-      setAssistantText("");
-      setStreamingText("");
-      setIsThinking(false);
+      resetResponseState();
       return;
     }
 
-    if (command.kind === "settings") {
+    if (action.kind === "open_settings") {
       setSettingsShortcuts([...settings.shortcuts]);
       setShowSettingsForm(true);
       setShowConnectForm(false);
-      setActiveQuery("");
-      setAssistantText("");
-      setStreamingText("");
-      setIsThinking(false);
+      resetResponseState();
       return;
     }
 
-    if (command.kind === "status") {
-      setActiveQuery("/status");
-      setAssistantText(
-        `Gateway: ${settings.gatewayUrl}\nStatus: ${connectionState}\nToken: ${settings.token ? "***" : "(none)"}`,
-      );
+    if (action.kind === "show_status") {
+      setActiveQuery(action.query);
+      setAssistantText(action.message);
       setStreamingText("");
       setIsThinking(false);
       setShowConnectForm(false);
       return;
     }
 
-    setActiveQuery(command.text);
+    setActiveQuery(action.queryLabel);
     setAssistantText("");
     setStreamingText("");
     streamingTextRef.current = "";
     setIsThinking(true);
     isThinkingRef.current = true;
     setShowConnectForm(false);
+    setSelectionContext(null);
 
     if (!settingsLoaded) {
       setAssistantText("Loading settings...");
@@ -221,7 +272,7 @@ export function App() {
     }
 
     try {
-      client.sendChatMessage(command.text, settings);
+      client.sendChatMessage(action.outgoingPrompt, settings);
     } catch (error) {
       setAssistantText(`Send failed: ${String(error)}`);
       setIsThinking(false);
@@ -269,14 +320,54 @@ export function App() {
     }
   }, [streamingText, assistantText]);
 
+  const handleInputChange = useCallback(
+    (value: string) => {
+      if (inputPlaceholder !== DEFAULT_INPUT_PLACEHOLDER) {
+        setInputPlaceholder(DEFAULT_INPUT_PLACEHOLDER);
+      }
+      setInput(value);
+    },
+    [inputPlaceholder, setInput],
+  );
+
+  const handleInputKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      const currentInput = safeTrim(inputRef.current?.value ?? input);
+      if (
+        selectionContext &&
+        currentInput.length === 0 &&
+        event.key === "Backspace"
+      ) {
+        event.preventDefault();
+        setSelectionContext(null);
+        return;
+      }
+
+      onInputKeyDown(event);
+    },
+    [input, onInputKeyDown, selectionContext],
+  );
+
+  const handleClearSelectionBadge = useCallback(() => {
+    setSelectionContext(null);
+    inputRef.current?.focus();
+  }, []);
+
+  const selectionBadge = selectionContext
+    ? `selected: ${selectionContext.chars} chars`
+    : undefined;
+
   return (
     <main className="app-root">
       <CommandInput
         value={input}
+        placeholder={inputPlaceholder}
+        selectionBadge={selectionBadge}
         connectionState={connectionState}
-        onChange={setInput}
+        onChange={handleInputChange}
+        onClearSelectionBadge={handleClearSelectionBadge}
         onSubmit={handleSubmit}
-        onKeyDown={onInputKeyDown}
+        onKeyDown={handleInputKeyDown}
         inputRef={inputRef}
       />
 
@@ -285,7 +376,7 @@ export function App() {
           commands={commandHints}
           activeIndex={hintIndex}
           onHover={setHintIndex}
-          onSelect={(cmd) => setInput(cmd.name)}
+          onSelect={(cmd) => handleInputChange(cmd.name)}
         />
       ) : showConnectForm ? (
         <ConnectForm
