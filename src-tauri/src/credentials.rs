@@ -56,11 +56,18 @@ pub struct DeviceTokenRecord {
     pub scopes: Vec<String>,
 }
 
-fn creds_path() -> std::path::PathBuf {
+/// Settings directory; MACCLAW_CONFIG_DIR overrides it for development and tests.
+fn config_dir() -> std::path::PathBuf {
+    if let Some(dir) = std::env::var_os("MACCLAW_CONFIG_DIR") {
+        return std::path::PathBuf::from(dir);
+    }
     dirs::config_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("ai.macclaw.panel")
-        .join(CREDS_FILE)
+}
+
+fn creds_path() -> std::path::PathBuf {
+    config_dir().join(CREDS_FILE)
 }
 
 fn write_creds_file(creds: &Credentials) -> Result<(), String> {
