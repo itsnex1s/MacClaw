@@ -5,6 +5,7 @@ import { emitNotchState } from "../lib/panel-window";
 type UseWsClientResult = {
   client: WsClient;
   connectionState: ConnectionState;
+  connectionNote: string;
   assistantText: string;
   setAssistantText: (text: string) => void;
   streamingText: string;
@@ -19,6 +20,7 @@ export function useWsClient(
   backgroundModeRef: MutableRefObject<boolean>,
 ): UseWsClientResult {
   const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
+  const [connectionNote, setConnectionNote] = useState("");
   const [assistantText, setAssistantText] = useState("");
   const [streamingText, setStreamingText] = useState("");
   const [isThinking, setIsThinking] = useState(false);
@@ -29,8 +31,9 @@ export function useWsClient(
 
   useEffect(() => {
     client.setHandlers({
-      onState: (state) => {
+      onState: (state, note) => {
         setConnectionState(state);
+        setConnectionNote(note ?? "");
         // BUG 2: If WS drops while background streaming, transition notch to "ready"
         // instead of leaving it stuck in "streaming" forever.
         if (
@@ -93,6 +96,7 @@ export function useWsClient(
   return {
     client,
     connectionState,
+    connectionNote,
     assistantText,
     setAssistantText,
     streamingText,

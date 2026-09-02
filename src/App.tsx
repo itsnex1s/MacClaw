@@ -77,6 +77,7 @@ export function App() {
   const {
     client,
     connectionState,
+    connectionNote,
     assistantText,
     setAssistantText,
     streamingText,
@@ -196,6 +197,11 @@ export function App() {
       await saveSettings(nextSettings);
       setSettings(nextSettings);
     } catch (error) {
+      // A pairing request keeps retrying in the background, so keep the settings.
+      if (client.lastFailure?.code === "PAIRING_REQUIRED") {
+        await saveSettings(nextSettings);
+        setSettings(nextSettings);
+      }
       // Show error briefly in the response panel.
       setActiveQuery("/connect");
       setAssistantText(
@@ -214,6 +220,8 @@ export function App() {
       gatewayUrl: settings.gatewayUrl,
       token: settings.token,
       connectionState,
+      deviceId: client.deviceId,
+      connectionNote,
     });
 
     if (action.kind === "noop") {

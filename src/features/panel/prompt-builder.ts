@@ -42,6 +42,17 @@ export function buildStatusMessage(params: {
   gatewayUrl: string;
   connectionState: ConnectionState;
   token: string;
+  deviceId?: string | null;
+  connectionNote?: string;
 }): string {
-  return `Gateway: ${params.gatewayUrl}\nStatus: ${params.connectionState}\nToken: ${params.token ? "***" : "(none)"}`;
+  const lines = [
+    `Gateway: ${params.gatewayUrl}`,
+    `Status: ${params.connectionState}`,
+    `Token: ${params.token ? "***" : "(none)"}`,
+    `Device: ${params.deviceId ?? "(no device identity)"}`,
+  ];
+  if (params.connectionState !== "connected" && params.connectionNote) {
+    lines.push("", params.connectionNote);
+  }
+  return lines.join("\n");
 }

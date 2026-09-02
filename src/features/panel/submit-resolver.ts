@@ -13,6 +13,8 @@ type ResolveSubmitParams = {
   gatewayUrl: string;
   token: string;
   connectionState: ConnectionState;
+  deviceId?: string | null;
+  connectionNote?: string;
 };
 
 export type SubmitAction =
@@ -46,6 +48,8 @@ export function resolveSubmitAction(params: ResolveSubmitParams): SubmitAction {
         gatewayUrl: params.gatewayUrl,
         connectionState: params.connectionState,
         token: params.token,
+        deviceId: params.deviceId,
+        connectionNote: params.connectionNote,
       }),
     };
   }
