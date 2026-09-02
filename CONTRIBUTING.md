@@ -4,8 +4,8 @@ Thanks for contributing to MacClaw — the macOS client for OpenClaw.
 
 ## Prerequisites
 
-- Node.js 20+
-- Rust toolchain (stable)
+- Node.js 22+
+- Rust toolchain 1.88 or newer (stable)
 - Tauri prerequisites for macOS
 - Running [OpenClaw](https://github.com/openclaw/openclaw) gateway (for manual testing)
 
@@ -31,7 +31,7 @@ npm run build
 
 - Keep the UI keyboard-first and minimal (Raycast-style).
 - Keep global shortcut and window lifecycle logic in `src-tauri/src/main.rs`.
-- Keep OpenClaw protocol parsing in `src/lib/ws-client.ts`.
+- Keep OpenClaw protocol logic in `src/lib/gateway-protocol.ts` and transport in `src/lib/ws-client.ts`.
 - Do not commit credentials, tokens, or local env secrets.
 
 ## Pull requests

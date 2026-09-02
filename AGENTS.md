@@ -7,7 +7,7 @@
   - global shortcut registration in `src-tauri/src/main.rs`
   - compact window at idle, expanded window on answer/form.
 - Never hardcode or commit secrets (gateway tokens/passwords).
-- Do not add OpenClaw protocol business logic in UI; protocol handling stays in `src/lib/ws-client.ts`.
+- Do not add OpenClaw protocol business logic in UI; protocol rules live in `src/lib/gateway-protocol.ts`, transport in `src/lib/ws-client.ts`.
 - Preserve component boundaries:
   - `src/components/*` for rendering
   - `src/lib/*` for transport, parsing, settings
@@ -21,4 +21,5 @@ npm run test
 npm run build
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
