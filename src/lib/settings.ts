@@ -13,7 +13,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   password: "",
   agentId: "",
   sessionKey: "main",
-  shortcuts: ["CmdOrCtrl+Shift+Space", "CmdOrCtrl+Shift+K", "Alt+Space"],
+  shortcuts: ["CmdOrCtrl+Shift+Space", "CmdOrCtrl+Shift+K", "CmdOrCtrl+Alt+Space"],
 };
 
 const LOCAL_FALLBACK_KEY = "macclaw.panel.settings";

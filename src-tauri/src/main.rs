@@ -21,7 +21,11 @@ use notch::{hide_notch, notch_clicked, show_notch, IS_BACKGROUND_RESPONSE, NOTCH
 use panel::{dismiss_panel, hide_panel, present_panel, restore_panel, IS_PANEL_OPEN, WINDOW_LABEL};
 use selection::{capture_selected_text, SelectionPrefillPayload, SELECTION_SHORTCUT};
 
-const DEFAULT_SHORTCUTS: [&str; 3] = ["CmdOrCtrl+Shift+Space", "CmdOrCtrl+Shift+K", "Alt+Space"];
+const DEFAULT_SHORTCUTS: [&str; 3] = [
+    "CmdOrCtrl+Shift+Space",
+    "CmdOrCtrl+Shift+K",
+    "CmdOrCtrl+Alt+Space",
+];
 
 fn handle_shortcut(app: &AppHandle) {
     // If a background response is active, restore from notch.
