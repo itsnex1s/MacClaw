@@ -1,8 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod credentials;
+mod identity;
 mod notch;
 mod panel;
+mod secrets;
 mod selection;
 
 use std::sync::atomic::Ordering;
@@ -10,7 +12,11 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
 
-use credentials::{clear_credentials, load_credentials, save_credentials};
+use credentials::{
+    clear_credentials, clear_device_token, load_credentials, load_device_token, save_credentials,
+    save_device_token,
+};
+use identity::{device_identity, sign_device_payload};
 use notch::{hide_notch, notch_clicked, show_notch, IS_BACKGROUND_RESPONSE, NOTCH_LABEL};
 use panel::{dismiss_panel, hide_panel, present_panel, restore_panel, IS_PANEL_OPEN, WINDOW_LABEL};
 use selection::{capture_selected_text, SelectionPrefillPayload, SELECTION_SHORTCUT};
@@ -121,6 +127,11 @@ fn main() {
             load_credentials,
             save_credentials,
             clear_credentials,
+            load_device_token,
+            save_device_token,
+            clear_device_token,
+            device_identity,
+            sign_device_payload,
             hide_panel,
             show_notch,
             hide_notch,
