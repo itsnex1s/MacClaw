@@ -1,10 +1,18 @@
+import { tauriDeviceAuth, type DeviceAuthBridge } from "./device-auth";
+import { extractText, isJsonMap, parseFrame, type JsonMap } from "./extract-text";
 import {
-  extractText,
-  extractTextWithMedia,
-  isJsonMap,
-  parseFrame,
-  type JsonMap,
-} from "./extract-text";
+  buildConnectParams,
+  buildDeviceAuthPayload,
+  describeConnectFailure,
+  OPERATOR_ROLE,
+  parseChatEvent,
+  parseConnectChallenge,
+  parseConnectFailure,
+  selectConnectAuth,
+  shouldPauseReconnect,
+  type ConnectFailure,
+  type DeviceIdentity,
+} from "./gateway-protocol";
 import type { AppSettings } from "./settings";
 
 export { extractText } from "./extract-text";
@@ -23,22 +31,60 @@ type Handlers = {
   onEvent: (event: BotEvent) => void;
 };
 
+type Attempt = {
+  onSuccess: () => void;
+  onFailure: (reason: string) => void;
+};
+
+type Pending = {
+  resolve: (payload: unknown) => void;
+  reject: (error: GatewayError) => void;
+};
+
+/** Error returned by the gateway in a `res` frame; `raw` keeps the structured details. */
+export class GatewayError extends Error {
+  constructor(
+    message: string,
+    public readonly raw: unknown = null,
+  ) {
+    super(message);
+    this.name = "GatewayError";
+  }
+}
+
+const CHALLENGE_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 30_000;
+const RECONNECT_INITIAL_MS = 1_000;
+const RECONNECT_MAX_MS = 30_000;
+const DEFAULT_TICK_INTERVAL_MS = 30_000;
+const TICK_TIMEOUT_CLOSE_CODE = 4000;
+
+const NOOP_HANDLERS: Handlers = { onState: () => {}, onEvent: () => {} };
+
 export class WsClient {
   private ws: WebSocket | null = null;
   private requestId = 1;
-  private handlers: Handlers = { onState: () => {}, onEvent: () => {} };
+  private handlers: Handlers = NOOP_HANDLERS;
+  private readonly deviceAuth: DeviceAuthBridge;
+  private identity: DeviceIdentity | null = null;
   private authenticated = false;
-  private pendingResponses = new Map<
-    string,
-    { resolve: (payload: unknown) => void; reject: (err: Error) => void }
-  >();
+  private pendingResponses = new Map<string, Pending>();
   private lastSettings: AppSettings | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private reconnectDelay = 1000;
+  private reconnectDelay = RECONNECT_INITIAL_MS;
+  private reconnectPaused = false;
   private intentionalDisconnect = false;
+  private challengeTimer: ReturnType<typeof setTimeout> | null = null;
+  private tickTimer: ReturnType<typeof setTimeout> | null = null;
+  private tickIntervalMs = DEFAULT_TICK_INTERVAL_MS;
+  private handshakeFailure: ConnectFailure | null = null;
+  private streamBuffer = "";
+  private activeRunId: string | null = null;
+  private sessionKey = "main";
 
-  constructor(handlers?: Handlers) {
-    if (handlers) this.handlers = handlers;
+  constructor(options: { handlers?: Handlers; deviceAuth?: DeviceAuthBridge } = {}) {
+    this.handlers = options.handlers ?? NOOP_HANDLERS;
+    this.deviceAuth = options.deviceAuth ?? tauriDeviceAuth;
   }
 
   setHandlers(handlers: Handlers): void {
@@ -56,60 +102,27 @@ export class WsClient {
     );
   }
 
+  /** Fingerprint the gateway lists under `openclaw devices list`, once known. */
+  get deviceId(): string | null {
+    return this.identity?.deviceId ?? null;
+  }
+
+  /** Session key the gateway reported for the current conversation. */
+  get currentSessionKey(): string {
+    return this.sessionKey;
+  }
+
+  get lastFailure(): ConnectFailure | null {
+    return this.handshakeFailure;
+  }
+
   connect(settings: AppSettings): void {
-    this.intentionalDisconnect = false;
-    this.clearReconnectTimer();
-    this.disconnectSocket();
-    this.authenticated = false;
-    this.lastSettings = settings;
-    this.handlers.onState("connecting");
-
-    try {
-      this.ws = new WebSocket(settings.gatewayUrl);
-    } catch (error) {
-      this.handlers.onState("error", String(error));
-      this.scheduleReconnect();
-      return;
-    }
-
-    this.ws.onopen = () => {
-      this.reconnectDelay = 1000;
-      // Wait for connect.challenge before marking as connected.
-    };
-
-    this.ws.onerror = () => {
-      this.handlers.onState("error", "WebSocket error");
-    };
-
-    this.ws.onclose = () => {
-      this.authenticated = false;
-      this.rejectAllPending("Connection closed");
-      this.handlers.onState("idle", "Disconnected");
-      this.scheduleReconnect();
-    };
-
-    this.ws.onmessage = (event) => {
-      this.handleMessage(String(event.data), settings);
-    };
+    this.reconnectPaused = false;
+    this.open(settings);
   }
 
   connectAndVerify(settings: AppSettings, timeoutMs = 8000): Promise<string> {
     return new Promise((resolve, reject) => {
-      this.intentionalDisconnect = false;
-      this.clearReconnectTimer();
-      this.disconnectSocket();
-      this.authenticated = false;
-      this.lastSettings = settings;
-      this.handlers.onState("connecting");
-
-      try {
-        this.ws = new WebSocket(settings.gatewayUrl);
-      } catch (error) {
-        this.handlers.onState("error", String(error));
-        reject(new Error(`Invalid URL: ${String(error)}`));
-        return;
-      }
-
       let settled = false;
       const timer = setTimeout(() => {
         if (!settled) {
@@ -120,42 +133,21 @@ export class WsClient {
         }
       }, timeoutMs);
 
-      const onAuthenticated = () => {
-        if (!settled) {
+      this.reconnectPaused = false;
+      this.open(settings, {
+        onSuccess: () => {
+          if (settled) return;
           settled = true;
           clearTimeout(timer);
           resolve("Connected");
-        }
-      };
-
-      const onFailed = (reason: string) => {
-        if (!settled) {
+        },
+        onFailure: (reason) => {
+          if (settled) return;
           settled = true;
           clearTimeout(timer);
-          this.handlers.onState("error", reason);
           reject(new Error(reason));
-        }
-      };
-
-      this.ws.onopen = () => {
-        this.reconnectDelay = 1000;
-        // Wait for connect.challenge
-      };
-
-      this.ws.onerror = () => {
-        onFailed(`Cannot connect to ${settings.gatewayUrl}`);
-      };
-
-      this.ws.onclose = () => {
-        this.authenticated = false;
-        this.rejectAllPending("Connection closed");
-        onFailed("Connection closed");
-        this.scheduleReconnect();
-      };
-
-      this.ws.onmessage = (event) => {
-        this.handleMessage(String(event.data), settings, onAuthenticated, onFailed);
-      };
+        },
+      });
     });
   }
 
@@ -165,30 +157,102 @@ export class WsClient {
     this.disconnectSocket();
   }
 
+  private open(settings: AppSettings, attempt?: Attempt): void {
+    this.intentionalDisconnect = false;
+    this.clearReconnectTimer();
+    this.disconnectSocket();
+    this.lastSettings = settings;
+    this.handshakeFailure = null;
+    this.handlers.onState("connecting");
+
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(settings.gatewayUrl);
+    } catch (error) {
+      const reason = `Invalid URL: ${String(error)}`;
+      this.handlers.onState("error", reason);
+      attempt?.onFailure(reason);
+      this.scheduleReconnect();
+      return;
+    }
+    this.ws = socket;
+
+    this.challengeTimer = setTimeout(() => {
+      if (this.ws === socket && !this.authenticated) {
+        const reason = "Gateway did not send a connect challenge";
+        this.handlers.onState("error", reason);
+        attempt?.onFailure(reason);
+        socket.close();
+      }
+    }, CHALLENGE_TIMEOUT_MS);
+
+    socket.onerror = () => {
+      this.handlers.onState("error", "WebSocket error");
+      attempt?.onFailure(`Cannot connect to ${settings.gatewayUrl}`);
+    };
+
+    socket.onclose = () => {
+      const failure = this.handshakeFailure;
+      this.authenticated = false;
+      this.stopTimers();
+      this.rejectAllPending("Connection closed");
+      if (!failure) {
+        this.handlers.onState("idle", "Disconnected");
+      }
+      attempt?.onFailure(
+        failure ? describeConnectFailure(failure) : "Connection closed",
+      );
+      this.scheduleReconnect();
+    };
+
+    socket.onmessage = (event) => {
+      this.handleMessage(String(event.data), settings, socket, attempt);
+    };
+  }
+
   private disconnectSocket(): void {
     this.authenticated = false;
+    this.stopTimers();
     this.rejectAllPending("Disconnected");
     if (this.ws) {
-      this.ws.onclose = null;
-      this.ws.onerror = null;
-      this.ws.onmessage = null;
-      this.ws.close();
+      const socket = this.ws;
       this.ws = null;
+      socket.onclose = null;
+      socket.onerror = null;
+      socket.onmessage = null;
+      if (
+        socket.readyState === WebSocket.CONNECTING ||
+        socket.readyState === WebSocket.OPEN
+      ) {
+        socket.close();
+      }
     }
   }
 
-  private scheduleReconnect(): void {
-    if (this.intentionalDisconnect || !this.lastSettings) {
+  private stopTimers(): void {
+    if (this.challengeTimer) {
+      clearTimeout(this.challengeTimer);
+      this.challengeTimer = null;
+    }
+    if (this.tickTimer) {
+      clearTimeout(this.tickTimer);
+      this.tickTimer = null;
+    }
+  }
+
+  private scheduleReconnect(delayMs?: number): void {
+    if (this.intentionalDisconnect || this.reconnectPaused || !this.lastSettings) {
       return;
     }
     this.clearReconnectTimer();
+    const delay = delayMs ?? this.reconnectDelay;
     this.reconnectTimer = setTimeout(() => {
-      if (this.lastSettings && !this.intentionalDisconnect) {
-        this.connect(this.lastSettings);
+      if (this.lastSettings && !this.intentionalDisconnect && !this.reconnectPaused) {
+        this.open(this.lastSettings);
       }
-    }, this.reconnectDelay);
-    // Exponential backoff: 1s → 2s → 4s → 8s → 15s max.
-    this.reconnectDelay = Math.min(this.reconnectDelay * 2, 15000);
+    }, delay);
+    // Exponential backoff: 1s, 2s, 4s ... capped at 30s like the reference client.
+    this.reconnectDelay = Math.min(this.reconnectDelay * 2, RECONNECT_MAX_MS);
   }
 
   private clearReconnectTimer(): void {
@@ -198,24 +262,45 @@ export class WsClient {
     }
   }
 
+  /** The gateway ticks every policy.tickIntervalMs; silence twice that long means a dead socket. */
+  private resetTickWatchdog(): void {
+    if (this.tickTimer) {
+      clearTimeout(this.tickTimer);
+    }
+    const socket = this.ws;
+    this.tickTimer = setTimeout(() => {
+      if (this.ws === socket && socket) {
+        socket.close(TICK_TIMEOUT_CLOSE_CODE, "tick timeout");
+      }
+    }, this.tickIntervalMs * 2);
+  }
+
   sendChatMessage(text: string, settings: AppSettings): void {
     if (!this.connected || !this.ws) {
       throw new Error("Not connected");
     }
 
-    const frame = {
-      type: "req",
-      id: String(this.requestId++),
-      method: "chat.send",
-      params: {
-        message: text,
-        sessionKey: settings.sessionKey || "main",
-        idempotencyKey: crypto.randomUUID(),
-        ...(settings.agentId ? { agentId: settings.agentId } : {}),
-      },
-    };
+    this.streamBuffer = "";
+    this.activeRunId = null;
+    this.sessionKey = settings.sessionKey || "main";
 
-    this.ws.send(JSON.stringify(frame));
+    void this.request<{ runId?: string }>("chat.send", {
+      message: text,
+      sessionKey: this.sessionKey,
+      idempotencyKey: crypto.randomUUID(),
+      ...(settings.agentId ? { agentId: settings.agentId } : {}),
+    })
+      .then((result) => {
+        if (isJsonMap(result) && typeof result.runId === "string") {
+          this.activeRunId = result.runId;
+        }
+      })
+      .catch((error: unknown) => {
+        this.handlers.onEvent({
+          kind: "error",
+          text: error instanceof Error ? error.message : String(error),
+        });
+      });
   }
 
   /** Send an RPC request to the gateway and return the response payload. */
@@ -234,16 +319,16 @@ export class WsClient {
       const timer = setTimeout(() => {
         this.pendingResponses.delete(id);
         reject(new Error(`Request ${method} timed out`));
-      }, 30_000);
+      }, REQUEST_TIMEOUT_MS);
 
       this.pendingResponses.set(id, {
         resolve: (payload) => {
           clearTimeout(timer);
           resolve(payload as T);
         },
-        reject: (err) => {
+        reject: (error) => {
           clearTimeout(timer);
-          reject(err);
+          reject(error);
         },
       });
 
@@ -257,147 +342,218 @@ export class WsClient {
     }
   }
 
-  private sendHandshake(
+  private async sendHandshake(
     settings: AppSettings,
-    onSuccess?: () => void,
-    onFailure?: (reason: string) => void,
-  ): void {
+    challengePayload: unknown,
+    socket: WebSocket,
+    attempt?: Attempt,
+  ): Promise<void> {
+    const challenge = parseConnectChallenge(challengePayload);
+    if (!challenge) {
+      const reason = "Gateway sent an invalid connect challenge";
+      this.handlers.onState("error", reason);
+      attempt?.onFailure(reason);
+      socket.close();
+      return;
+    }
+
+    this.identity = this.identity ?? (await this.deviceAuth.identity());
+    const stored = this.identity
+      ? await this.deviceAuth.loadToken(settings.gatewayUrl)
+      : null;
+    const plan = selectConnectAuth({
+      token: settings.token,
+      password: settings.password,
+      storedDeviceToken: stored,
+    });
+
+    let signature: string | null = null;
+    if (this.identity) {
+      try {
+        signature = await this.deviceAuth.sign(
+          buildDeviceAuthPayload({
+            deviceId: this.identity.deviceId,
+            role: OPERATOR_ROLE,
+            scopes: plan.scopes,
+            signedAtMs: challenge.ts,
+            token: plan.signatureToken,
+            nonce: challenge.nonce,
+          }),
+        );
+      } catch (error) {
+        const reason = `Could not sign the connect challenge: ${String(error)}`;
+        this.handlers.onState("error", reason);
+        attempt?.onFailure(reason);
+        socket.close();
+        return;
+      }
+    }
+
+    // The socket may have been replaced while we were waiting on the Keychain.
+    if (this.ws !== socket || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
     const id = String(this.requestId++);
-    const frame: JsonMap = {
+    this.pendingResponses.set(id, {
+      resolve: (payload) => {
+        this.acceptHello(payload, settings, stored, attempt);
+      },
+      reject: (error) => {
+        this.handleConnectFailure(error, settings, attempt);
+      },
+    });
+    this.sendFrame({
       type: "req",
       id,
       method: "connect",
-      params: {
-        minProtocol: 3,
-        maxProtocol: 3,
-        client: {
-          id: "openclaw-control-ui",
-          version: "0.1.0",
-          platform: "darwin",
-          mode: "backend",
-        },
-        role: "operator",
-        scopes: ["operator.admin"],
-        ...(settings.token || settings.password
-          ? {
-              auth: {
-                ...(settings.token ? { token: settings.token } : {}),
-                ...(settings.password ? { password: settings.password } : {}),
-              },
-            }
-          : {}),
-      },
-    };
-
-    this.sendFrame(frame);
-
-    this.pendingResponses.set(id, {
-      resolve: () => {
-        this.authenticated = true;
-        this.handlers.onState("connected");
-        onSuccess?.();
-      },
-      reject: (err) => {
-        this.handlers.onState("error", err.message);
-        onFailure?.(err.message);
-      },
+      params: buildConnectParams({
+        identity: this.identity,
+        auth: plan.auth,
+        scopes: plan.scopes,
+        challenge,
+        signature,
+      }),
     });
+  }
+
+  private acceptHello(
+    payload: unknown,
+    settings: AppSettings,
+    stored: { token: string; scopes: string[] } | null,
+    attempt?: Attempt,
+  ): void {
+    const hello = isJsonMap(payload) ? payload : {};
+    const auth = isJsonMap(hello.auth) ? hello.auth : {};
+    const policy = isJsonMap(hello.policy) ? hello.policy : {};
+
+    this.authenticated = true;
+    this.handshakeFailure = null;
+    this.reconnectDelay = RECONNECT_INITIAL_MS;
+    this.reconnectPaused = false;
+    if (this.challengeTimer) {
+      clearTimeout(this.challengeTimer);
+      this.challengeTimer = null;
+    }
+
+    const tickIntervalMs = policy.tickIntervalMs;
+    this.tickIntervalMs =
+      typeof tickIntervalMs === "number" && tickIntervalMs > 0
+        ? tickIntervalMs
+        : DEFAULT_TICK_INTERVAL_MS;
+    this.resetTickWatchdog();
+
+    const deviceToken =
+      typeof auth.deviceToken === "string" ? auth.deviceToken.trim() : "";
+    if (deviceToken && this.identity) {
+      const liveScopes = Array.isArray(auth.scopes)
+        ? auth.scopes.filter((scope): scope is string => typeof scope === "string")
+        : [];
+      // A re-issued identical token keeps the scopes it was approved with.
+      const scopes = stored?.token === deviceToken ? stored.scopes : liveScopes;
+      void this.deviceAuth.saveToken(settings.gatewayUrl, {
+        token: deviceToken,
+        scopes,
+      });
+    }
+
+    this.handlers.onState("connected");
+    attempt?.onSuccess();
+  }
+
+  private handleConnectFailure(
+    error: GatewayError,
+    settings: AppSettings,
+    attempt?: Attempt,
+  ): void {
+    const failure = parseConnectFailure(error.raw);
+    this.handshakeFailure = failure;
+    this.reconnectPaused = shouldPauseReconnect(failure);
+    if (failure.code === "AUTH_DEVICE_TOKEN_MISMATCH") {
+      void this.deviceAuth.clearToken(settings.gatewayUrl);
+    }
+    const reason = describeConnectFailure(failure);
+    this.handlers.onState("error", reason);
+    attempt?.onFailure(reason);
+    // The gateway closes the socket after a rejected connect; onclose schedules the retry.
+    if (failure.retryAfterMs && !this.reconnectPaused) {
+      this.reconnectDelay = Math.min(failure.retryAfterMs, RECONNECT_MAX_MS);
+    }
   }
 
   private handleMessage(
     raw: string,
     settings: AppSettings,
-    onAuthenticated?: () => void,
-    onFailed?: (reason: string) => void,
+    socket: WebSocket,
+    attempt?: Attempt,
   ): void {
     const frame = parseFrame(raw);
     if (!frame) return;
 
+    if (this.authenticated) {
+      this.resetTickWatchdog();
+    }
+
     const frameType = typeof frame.type === "string" ? frame.type : "";
 
-    // Handle response frames
     if (frameType === "res") {
       const id = typeof frame.id === "string" ? frame.id : "";
       const pending = this.pendingResponses.get(id);
-      if (pending) {
-        this.pendingResponses.delete(id);
-        if (frame.ok) {
-          pending.resolve(frame.payload);
-        } else {
-          const errText = extractText(frame.error) || "Request failed";
-          pending.reject(new Error(errText));
-        }
-        return;
-      }
-
-      // Response for chat.send or other requests — forward to UI
-      if (!frame.ok && frame.error) {
-        const text = extractText(frame.error) || "Gateway returned an error.";
-        this.handlers.onEvent({ kind: "error", text });
-        return;
-      }
-
-      const text = extractText(frame.payload);
-      if (text) {
-        this.handlers.onEvent({ kind: "assistant", text });
+      if (!pending) return;
+      this.pendingResponses.delete(id);
+      if (frame.ok) {
+        pending.resolve(frame.payload);
+      } else {
+        const text = extractText(frame.error) || "Request failed";
+        pending.reject(new GatewayError(text, frame.error));
       }
       return;
     }
 
-    // Handle event frames
-    if (frameType === "event") {
-      const eventName = typeof frame.event === "string" ? frame.event : "";
-      const payload = isJsonMap(frame.payload) ? frame.payload : {};
+    if (frameType !== "event") return;
 
-      // Gateway handshake challenge
-      if (eventName === "connect.challenge") {
-        this.sendHandshake(settings, onAuthenticated, onFailed);
-        return;
-      }
+    const eventName = typeof frame.event === "string" ? frame.event : "";
+    const payload = isJsonMap(frame.payload) ? frame.payload : {};
 
-      // Chat events: {event: "chat", payload: {state: "delta"|"final"|"aborted"|"error", message, ...}}
-      if (eventName === "chat") {
-        const state = typeof payload.state === "string" ? payload.state : "";
-
-        if (state === "delta") {
-          const messageText = extractText(payload.message);
-          if (messageText) {
-            this.handlers.onEvent({ kind: "assistant_delta", text: messageText });
-          }
-          return;
-        }
-
-        if (state === "final") {
-          const messageText = extractTextWithMedia(payload.message);
-          this.handlers.onEvent({ kind: "assistant_done" });
-          if (messageText) {
-            this.handlers.onEvent({ kind: "assistant", text: messageText });
-          }
-          return;
-        }
-
-        const messageText = extractText(payload.message);
-
-        if (state === "error" || state === "aborted") {
-          const errText =
-            typeof payload.errorMessage === "string"
-              ? payload.errorMessage
-              : messageText || "Agent error.";
-          this.handlers.onEvent({ kind: "error", text: errText });
-          return;
-        }
-
-        return;
-      }
-
-      // Other events — ignore
+    if (eventName === "connect.challenge") {
+      void this.sendHandshake(settings, frame.payload, socket, attempt);
       return;
+    }
+
+    if (eventName === "chat") {
+      this.handleChatEvent(payload);
+    }
+  }
+
+  private handleChatEvent(payload: JsonMap): void {
+    const runId = typeof payload.runId === "string" ? payload.runId : null;
+    if (this.activeRunId && runId && runId !== this.activeRunId) {
+      return;
+    }
+    if (typeof payload.sessionKey === "string" && payload.sessionKey) {
+      this.sessionKey = payload.sessionKey;
+    }
+
+    const { update, buffer } = parseChatEvent(payload, this.streamBuffer);
+    this.streamBuffer = buffer;
+
+    if (update.kind === "delta") {
+      this.handlers.onEvent({ kind: "assistant_delta", text: update.text });
+    } else if (update.kind === "final") {
+      this.activeRunId = null;
+      this.handlers.onEvent({ kind: "assistant_done" });
+      if (update.text) {
+        this.handlers.onEvent({ kind: "assistant", text: update.text });
+      }
+    } else if (update.kind === "error") {
+      this.activeRunId = null;
+      this.handlers.onEvent({ kind: "error", text: update.text });
     }
   }
 
   private rejectAllPending(reason: string): void {
     for (const pending of this.pendingResponses.values()) {
-      pending.reject(new Error(reason));
+      pending.reject(new GatewayError(reason));
     }
     this.pendingResponses.clear();
   }

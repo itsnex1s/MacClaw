@@ -8,7 +8,7 @@ export type AppSettings = {
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  gatewayUrl: "ws://127.0.0.1:19819",
+  gatewayUrl: "ws://127.0.0.1:18789",
   token: "",
   password: "",
   agentId: "",

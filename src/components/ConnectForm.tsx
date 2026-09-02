@@ -24,7 +24,7 @@ export function ConnectForm({
             className="connect-input"
             value={gatewayUrl}
             onChange={(event) => onGatewayUrlChange(event.target.value)}
-            placeholder="ws://127.0.0.1:19819"
+            placeholder="ws://127.0.0.1:18789"
             autoFocus
           />
         </div>
