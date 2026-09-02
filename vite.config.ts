@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 1520,
-    strictPort: true
+    strictPort: true,
   },
   build: {
     rollupOptions: {

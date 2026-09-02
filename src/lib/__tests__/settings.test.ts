@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, loadSettings, normalizeSettings, saveSettings } from "../settings";
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+  normalizeSettings,
+  saveSettings,
+} from "../settings";
 
 describe("normalizeSettings", () => {
   it("fills defaults for empty input", () => {

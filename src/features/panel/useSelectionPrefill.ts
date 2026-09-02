@@ -21,9 +21,7 @@ export function useSelectionPrefill(params: UseSelectionPrefillParams): void {
     setSelectionContext,
   } = params;
 
-  const preserveNextOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const preserveNextOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let aborted = false;

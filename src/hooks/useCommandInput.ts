@@ -1,9 +1,5 @@
 import { useState, type KeyboardEvent } from "react";
-import {
-  matchingCommands,
-  safeTrim,
-  type CommandDefinition,
-} from "../lib/commands";
+import { matchingCommands, safeTrim, type CommandDefinition } from "../lib/commands";
 
 type HintIndexUpdate = number | ((current: number) => number);
 

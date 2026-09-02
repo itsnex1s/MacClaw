@@ -34,10 +34,7 @@ export function mediaKind(mime: string): MediaKind {
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("audio/")) return "audio";
   if (mime.startsWith("video/")) return "video";
-  if (
-    mime === "application/pdf" ||
-    mime.startsWith("text/")
-  ) {
+  if (mime === "application/pdf" || mime.startsWith("text/")) {
     return "document";
   }
   return "unknown";

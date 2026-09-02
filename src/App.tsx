@@ -52,11 +52,10 @@ function resolvePanelMode(params: {
 export function App() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [inputPlaceholder, setInputPlaceholder] = useState(
-    DEFAULT_INPUT_PLACEHOLDER,
+  const [inputPlaceholder, setInputPlaceholder] = useState(DEFAULT_INPUT_PLACEHOLDER);
+  const [selectionContext, setSelectionContext] = useState<SelectionContext | null>(
+    null,
   );
-  const [selectionContext, setSelectionContext] =
-    useState<SelectionContext | null>(null);
 
   const [activeQuery, setActiveQuery] = useState("");
   const [showConnectForm, setShowConnectForm] = useState(false);
@@ -64,9 +63,9 @@ export function App() {
   const [connectToken, setConnectToken] = useState("");
 
   const [showSettingsForm, setShowSettingsForm] = useState(false);
-  const [settingsShortcuts, setSettingsShortcuts] = useState<
-    [string, string, string]
-  >(DEFAULT_SETTINGS.shortcuts);
+  const [settingsShortcuts, setSettingsShortcuts] = useState<[string, string, string]>(
+    DEFAULT_SETTINGS.shortcuts,
+  );
 
   const [backgroundMode, setBackgroundMode] = useState(false);
   const backgroundModeRef = useRef(false);
@@ -117,7 +116,13 @@ export function App() {
     streamingTextRef.current = "";
     setIsThinking(false);
     isThinkingRef.current = false;
-  }, [setAssistantText, setStreamingText, setIsThinking, isThinkingRef, streamingTextRef]);
+  }, [
+    setAssistantText,
+    setStreamingText,
+    setIsThinking,
+    isThinkingRef,
+    streamingTextRef,
+  ]);
 
   const clearConversation = useCallback(() => {
     setInput("");
@@ -280,16 +285,13 @@ export function App() {
     }
   };
 
-  const handleShortcutChange = useCallback(
-    (index: number, value: string) => {
-      setSettingsShortcuts((prev) => {
-        const next: [string, string, string] = [...prev];
-        next[index] = value;
-        return next;
-      });
-    },
-    [],
-  );
+  const handleShortcutChange = useCallback((index: number, value: string) => {
+    setSettingsShortcuts((prev) => {
+      const next: [string, string, string] = [...prev];
+      next[index] = value;
+      return next;
+    });
+  }, []);
 
   const handleSaveSettings = async (event: FormEvent) => {
     event.preventDefault();
@@ -333,11 +335,7 @@ export function App() {
   const handleInputKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
       const currentInput = safeTrim(inputRef.current?.value ?? input);
-      if (
-        selectionContext &&
-        currentInput.length === 0 &&
-        event.key === "Backspace"
-      ) {
+      if (selectionContext && currentInput.length === 0 && event.key === "Backspace") {
         event.preventDefault();
         setSelectionContext(null);
         return;

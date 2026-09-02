@@ -90,9 +90,7 @@ export function extractText(input: unknown): string {
     const parts = input.content
       .filter(
         (block: unknown) =>
-          isJsonMap(block) &&
-          block.type === "text" &&
-          typeof block.text === "string",
+          isJsonMap(block) && block.type === "text" && typeof block.text === "string",
       )
       .map((block: unknown) => String((block as JsonMap).text))
       .filter(Boolean);

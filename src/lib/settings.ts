@@ -119,9 +119,7 @@ export async function loadSettings(): Promise<AppSettings> {
       password: creds.password,
       agentId: creds.agentId,
       sessionKey: creds.sessionKey,
-      shortcuts: (creds.shortcuts ?? undefined) as
-        | [string, string, string]
-        | undefined,
+      shortcuts: (creds.shortcuts ?? undefined) as [string, string, string] | undefined,
     });
   } catch {
     return loadFromLocalStorage();

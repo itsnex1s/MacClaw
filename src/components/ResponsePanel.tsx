@@ -66,8 +66,7 @@ function MarkdownBlock({ children }: { children: string }) {
       rehypePlugins={rehypePlugins}
       components={{
         code({ className, children, ...rest }) {
-          const isBlock =
-            typeof children === "string" && children.includes("\n");
+          const isBlock = typeof children === "string" && children.includes("\n");
           if (isBlock || className) {
             return <CodeBlock className={className}>{children}</CodeBlock>;
           }
@@ -88,7 +87,10 @@ function MarkdownBlock({ children }: { children: string }) {
 }
 
 export const ResponsePanel = forwardRef<HTMLElement, ResponsePanelProps>(
-  function ResponsePanel({ activeQuery, response, isStreaming, isThinking, onCopy, client }, ref) {
+  function ResponsePanel(
+    { activeQuery, response, isStreaming, isThinking, onCopy, client },
+    ref,
+  ) {
     // Only parse MEDIA/inline-image segments from final text.
     // During streaming, render plain Markdown (MEDIA paths may be incomplete).
     const segments = useMemo(
@@ -104,11 +106,7 @@ export const ResponsePanel = forwardRef<HTMLElement, ResponsePanelProps>(
     return (
       <section className="dropdown-panel" ref={ref}>
         {canCopy && (
-          <button
-            className="copy-btn"
-            onClick={onCopy}
-            title="Copy to clipboard"
-          >
+          <button className="copy-btn" onClick={onCopy} title="Copy to clipboard">
             <svg
               width="14"
               height="14"

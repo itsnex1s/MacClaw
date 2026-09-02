@@ -1,10 +1,6 @@
 import { useEffect, type MutableRefObject, type RefObject } from "react";
 import type { WsClient } from "../lib/ws-client";
-import {
-  emitNotchState,
-  hidePanelWindow,
-  showNotch,
-} from "../lib/panel-window";
+import { emitNotchState, hidePanelWindow, showNotch } from "../lib/panel-window";
 import type { AppSettings } from "../lib/settings";
 
 type PanelLifecycleDeps = {

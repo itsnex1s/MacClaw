@@ -9,9 +9,7 @@ import {
 
 /** Resize window height only — Rust handles position on show. */
 async function setHeight(height: number): Promise<void> {
-  const { getCurrentWindow, LogicalSize } = await import(
-    "@tauri-apps/api/window"
-  );
+  const { getCurrentWindow, LogicalSize } = await import("@tauri-apps/api/window");
   await getCurrentWindow().setSize(new LogicalSize(PANEL_WIDTH, height));
 }
 
@@ -36,9 +34,7 @@ export async function resizePanelWindow(mode: PanelMode): Promise<void> {
   }
 }
 
-export async function resizePanelToContent(
-  contentHeight: number,
-): Promise<void> {
+export async function resizePanelToContent(contentHeight: number): Promise<void> {
   const total = Math.min(
     Math.max(
       PANEL_INPUT_HEIGHT + contentHeight + PANEL_RESPONSE_CHROME,

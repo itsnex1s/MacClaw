@@ -27,3 +27,6 @@ npm-debug.log*
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# Tauri generated schemas
+src-tauri/gen/

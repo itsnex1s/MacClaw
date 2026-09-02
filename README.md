@@ -25,27 +25,27 @@
 
 ## Features
 
-| | Feature | Description |
-|---|---|---|
-| :keyboard: | **Global hotkeys** | Summon the panel from anywhere with `Cmd+Shift+Space`, `Cmd+Shift+K`, or `Alt+Space` |
-| :zap: | **Compact idle strip** | Minimal floating bar that stays out of the way |
-| :speech_balloon: | **Streaming responses** | Auto-resizing panel with live markdown rendering via OpenClaw chat protocol |
-| :electric_plug: | **Slash commands** | `/connect`, `/status` for quick OpenClaw gateway management |
-| :art: | **macOS vibrancy** | Native blur-through glass effect (HUD window material) |
-| :lock: | **Secure credentials** | Tokens saved via Tauri filesystem; localStorage fallback never stores secrets |
-| :arrows_counterclockwise: | **Auto-reconnect** | Re-establishes OpenClaw connection each time the panel is shown |
-| :clipboard: | **Copy to clipboard** | One-click copy of any response |
+|                           | Feature                 | Description                                                                          |
+| ------------------------- | ----------------------- | ------------------------------------------------------------------------------------ |
+| :keyboard:                | **Global hotkeys**      | Summon the panel from anywhere with `Cmd+Shift+Space`, `Cmd+Shift+K`, or `Alt+Space` |
+| :zap:                     | **Compact idle strip**  | Minimal floating bar that stays out of the way                                       |
+| :speech_balloon:          | **Streaming responses** | Auto-resizing panel with live markdown rendering via OpenClaw chat protocol          |
+| :electric_plug:           | **Slash commands**      | `/connect`, `/status` for quick OpenClaw gateway management                          |
+| :art:                     | **macOS vibrancy**      | Native blur-through glass effect (HUD window material)                               |
+| :lock:                    | **Secure credentials**  | Tokens saved via Tauri filesystem; localStorage fallback never stores secrets        |
+| :arrows_counterclockwise: | **Auto-reconnect**      | Re-establishes OpenClaw connection each time the panel is shown                      |
+| :clipboard:               | **Copy to clipboard**   | One-click copy of any response                                                       |
 
 ## Quick Start
 
 ### Prerequisites
 
-| Dependency | Version |
-|---|---|
-| [Node.js](https://nodejs.org/) | >= 18 |
-| [Rust](https://rustup.rs/) | >= 1.77.2 |
-| macOS | >= 11.0 (Big Sur) |
-| Running [OpenClaw](https://github.com/openclaw/openclaw) gateway | any |
+| Dependency                                                       | Version           |
+| ---------------------------------------------------------------- | ----------------- |
+| [Node.js](https://nodejs.org/)                                   | >= 18             |
+| [Rust](https://rustup.rs/)                                       | >= 1.77.2         |
+| macOS                                                            | >= 11.0 (Big Sur) |
+| Running [OpenClaw](https://github.com/openclaw/openclaw) gateway | any               |
 
 ### Install & Run
 
@@ -79,33 +79,33 @@ The `.app` bundle will be in `src-tauri/target/release/bundle/`.
 
 The status dot in the input bar shows connection state:
 
-| Color | State |
-|---|---|
-| :white_circle: Gray | Disconnected |
+| Color                  | State                  |
+| ---------------------- | ---------------------- |
+| :white_circle: Gray    | Disconnected           |
 | :yellow_circle: Yellow | Connecting to OpenClaw |
-| :green_circle: Green | Connected |
-| :red_circle: Red | Error |
+| :green_circle: Green   | Connected              |
+| :red_circle: Red       | Error                  |
 
 ---
 
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-|---|---|
-| <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> | Toggle panel |
-| <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd> | Toggle panel (alt) |
-| <kbd>Alt</kbd>+<kbd>Space</kbd> | Toggle panel (alt) |
-| <kbd>Enter</kbd> | Send prompt / submit form |
-| <kbd>Escape</kbd> | Hide panel |
-| <kbd>Arrow Up</kbd> / <kbd>Down</kbd> | Navigate command hints |
-| <kbd>Tab</kbd> | Autocomplete slash command |
+| Shortcut                                         | Action                     |
+| ------------------------------------------------ | -------------------------- |
+| <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> | Toggle panel               |
+| <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd>     | Toggle panel (alt)         |
+| <kbd>Alt</kbd>+<kbd>Space</kbd>                  | Toggle panel (alt)         |
+| <kbd>Enter</kbd>                                 | Send prompt / submit form  |
+| <kbd>Escape</kbd>                                | Hide panel                 |
+| <kbd>Arrow Up</kbd> / <kbd>Down</kbd>            | Navigate command hints     |
+| <kbd>Tab</kbd>                                   | Autocomplete slash command |
 
 ## Slash Commands
 
-| Command | Description |
-|---|---|
-| `/connect` | Open OpenClaw gateway connection form |
-| `/status` | Show current gateway URL, connection state, and token status |
+| Command    | Description                                                  |
+| ---------- | ------------------------------------------------------------ |
+| `/connect` | Open OpenClaw gateway connection form                        |
+| `/status`  | Show current gateway URL, connection state, and token status |
 
 ---
 
