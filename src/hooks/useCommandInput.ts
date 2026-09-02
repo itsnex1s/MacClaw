@@ -1,9 +1,11 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
 import {
   matchingCommands,
   safeTrim,
   type CommandDefinition,
 } from "../lib/commands";
+
+type HintIndexUpdate = number | ((current: number) => number);
 
 type UseCommandInputResult = {
   input: string;
@@ -12,7 +14,7 @@ type UseCommandInputResult = {
   commandHints: CommandDefinition[];
   showHints: boolean;
   hintIndex: number;
-  setHintIndex: (v: number) => void;
+  setHintIndex: (v: HintIndexUpdate) => void;
   onInputKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
 };
 
@@ -21,17 +23,23 @@ export function useCommandInput(
   activeQuery: string,
 ): UseCommandInputResult {
   const [input, setInput] = useState("");
-  const [hintIndex, setHintIndex] = useState(0);
+  // The selected hint belongs to the input it was chosen for; a different
+  // input starts again at the top without needing an effect to reset it.
+  const [hint, setHint] = useState({ input: "", index: 0 });
 
   const trimmedInput = safeTrim(input);
   const commandHints =
     !showConnectForm && !activeQuery ? matchingCommands(trimmedInput) : [];
   const showHints = commandHints.length > 0;
+  const hintIndex = hint.input === trimmedInput ? hint.index : 0;
 
-  // Reset hint index when filtered list changes.
-  useEffect(() => {
-    setHintIndex(0);
-  }, [trimmedInput]);
+  const setHintIndex = (update: HintIndexUpdate) => {
+    setHint((previous) => {
+      const current = previous.input === trimmedInput ? previous.index : 0;
+      const index = typeof update === "function" ? update(current) : update;
+      return { input: trimmedInput, index };
+    });
+  };
 
   const onInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (!showHints) return;

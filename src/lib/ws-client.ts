@@ -1,4 +1,10 @@
-import { extractText, extractTextWithMedia, isJsonMap, parseFrame, type JsonMap } from "./extract-text";
+import {
+  extractText,
+  extractTextWithMedia,
+  isJsonMap,
+  parseFrame,
+  type JsonMap,
+} from "./extract-text";
 import type { AppSettings } from "./settings";
 
 export { extractText } from "./extract-text";
@@ -20,7 +26,7 @@ type Handlers = {
 export class WsClient {
   private ws: WebSocket | null = null;
   private requestId = 1;
-  private handlers: Handlers;
+  private handlers: Handlers = { onState: () => {}, onEvent: () => {} };
   private authenticated = false;
   private pendingResponses = new Map<
     string,
@@ -31,7 +37,11 @@ export class WsClient {
   private reconnectDelay = 1000;
   private intentionalDisconnect = false;
 
-  constructor(handlers: Handlers) {
+  constructor(handlers?: Handlers) {
+    if (handlers) this.handlers = handlers;
+  }
+
+  setHandlers(handlers: Handlers): void {
     this.handlers = handlers;
   }
 
@@ -314,8 +324,7 @@ export class WsClient {
         if (frame.ok) {
           pending.resolve(frame.payload);
         } else {
-          const errText =
-            extractText(frame.error) || "Request failed";
+          const errText = extractText(frame.error) || "Request failed";
           pending.reject(new Error(errText));
         }
         return;
@@ -323,8 +332,7 @@ export class WsClient {
 
       // Response for chat.send or other requests — forward to UI
       if (!frame.ok && frame.error) {
-        const text =
-          extractText(frame.error) || "Gateway returned an error.";
+        const text = extractText(frame.error) || "Gateway returned an error.";
         this.handlers.onEvent({ kind: "error", text });
         return;
       }
@@ -338,8 +346,7 @@ export class WsClient {
 
     // Handle event frames
     if (frameType === "event") {
-      const eventName =
-        typeof frame.event === "string" ? frame.event : "";
+      const eventName = typeof frame.event === "string" ? frame.event : "";
       const payload = isJsonMap(frame.payload) ? frame.payload : {};
 
       // Gateway handshake challenge
@@ -372,9 +379,10 @@ export class WsClient {
         const messageText = extractText(payload.message);
 
         if (state === "error" || state === "aborted") {
-          const errText = typeof payload.errorMessage === "string"
-            ? payload.errorMessage
-            : messageText || "Agent error.";
+          const errText =
+            typeof payload.errorMessage === "string"
+              ? payload.errorMessage
+              : messageText || "Agent error.";
           this.handlers.onEvent({ kind: "error", text: errText });
           return;
         }

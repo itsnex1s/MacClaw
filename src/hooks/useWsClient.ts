@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type MutableRefObject } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { WsClient, type ConnectionState } from "../lib/ws-client";
 import { emitNotchState } from "../lib/panel-window";
 
@@ -18,22 +18,17 @@ type UseWsClientResult = {
 export function useWsClient(
   backgroundModeRef: MutableRefObject<boolean>,
 ): UseWsClientResult {
-  const [connectionState, setConnectionState] =
-    useState<ConnectionState>("idle");
+  const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
   const [assistantText, setAssistantText] = useState("");
   const [streamingText, setStreamingText] = useState("");
   const [isThinking, setIsThinking] = useState(false);
 
   const isThinkingRef = useRef(false);
   const streamingTextRef = useRef("");
-  const clientRef = useRef<WsClient | null>(null);
+  const [client] = useState(() => new WsClient());
 
-  const client = useMemo(() => {
-    if (clientRef.current) {
-      return clientRef.current;
-    }
-
-    const instance = new WsClient({
+  useEffect(() => {
+    client.setHandlers({
       onState: (state) => {
         setConnectionState(state);
         // BUG 2: If WS drops while background streaming, transition notch to "ready"
@@ -93,10 +88,7 @@ export function useWsClient(
         }
       },
     });
-
-    clientRef.current = instance;
-    return instance;
-  }, [backgroundModeRef]);
+  }, [client, backgroundModeRef]);
 
   return {
     client,
