@@ -29,5 +29,5 @@ export function usePanelResize(
       const height = body ? body.scrollHeight + 18 : 48;
       void resizePanelToContent(height);
     });
-  }, [panelMode, renderedAnswer, isThinking]);
+  }, [panelMode, renderedAnswer, isThinking, responsePanelRef]);
 }

@@ -15,7 +15,7 @@ listen("notch-state", (e) => {
     if (payload.state === "ready" && payload.preview) {
       // Strip markdown and take first line.
       const clean = payload.preview
-        .replace(/[#*_`~>\[\]()!]/g, "")
+        .replace(/[#*_`~>[\]()!]/g, "")
         .trim();
       const firstLine = clean.split("\n").find((l) => l.trim().length > 0) ?? clean;
       previewEl.textContent = firstLine.slice(0, 80);

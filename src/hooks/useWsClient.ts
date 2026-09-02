@@ -96,7 +96,7 @@ export function useWsClient(
 
     clientRef.current = instance;
     return instance;
-  }, []);
+  }, [backgroundModeRef]);
 
   return {
     client,

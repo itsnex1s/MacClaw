@@ -24,15 +24,16 @@ pub fn dismiss_panel(window: &tauri::WebviewWindow) {
 /// This eliminates drift from Dock auto-hide, screen changes, etc.
 pub fn present_panel(window: &tauri::WebviewWindow) {
     IS_PANEL_OPEN.store(true, Ordering::SeqCst);
-    let _ = window.set_size(tauri::Size::Logical(
-        tauri::LogicalSize::new(COMPACT_WIDTH, COMPACT_HEIGHT),
-    ));
+    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
+        COMPACT_WIDTH,
+        COMPACT_HEIGHT,
+    )));
 
     match CENTER_POS.get() {
         Some(&(x, y)) => {
-            let _ = window.set_position(tauri::Position::Physical(
-                tauri::PhysicalPosition::new(x, y),
-            ));
+            let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(
+                x, y,
+            )));
         }
         None => {
             // First open — let macOS compute the centered position.
@@ -60,9 +61,9 @@ pub fn restore_panel(window: &tauri::WebviewWindow) {
 
     match CENTER_POS.get() {
         Some(&(x, y)) => {
-            let _ = window.set_position(tauri::Position::Physical(
-                tauri::PhysicalPosition::new(x, y),
-            ));
+            let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(
+                x, y,
+            )));
         }
         None => {
             let _ = window.center();

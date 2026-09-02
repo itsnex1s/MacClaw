@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useMemo } from "react";
+import { forwardRef, useCallback, useMemo, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -20,7 +20,7 @@ function CodeBlock({
   children,
 }: {
   className?: string;
-  children?: React.ReactNode;
+  children?: ReactNode;
 }) {
   const text = String(children).replace(/\n$/, "");
   const language = className?.replace("language-", "") ?? "";
@@ -89,10 +89,6 @@ function MarkdownBlock({ children }: { children: string }) {
 
 export const ResponsePanel = forwardRef<HTMLElement, ResponsePanelProps>(
   function ResponsePanel({ activeQuery, response, isStreaming, isThinking, onCopy, client }, ref) {
-    if (!activeQuery) {
-      return null;
-    }
-
     // Only parse MEDIA/inline-image segments from final text.
     // During streaming, render plain Markdown (MEDIA paths may be incomplete).
     const segments = useMemo(
@@ -100,6 +96,10 @@ export const ResponsePanel = forwardRef<HTMLElement, ResponsePanelProps>(
       [response, isStreaming],
     );
     const canCopy = !!response && !isThinking;
+
+    if (!activeQuery) {
+      return null;
+    }
 
     return (
       <section className="dropdown-panel" ref={ref}>
