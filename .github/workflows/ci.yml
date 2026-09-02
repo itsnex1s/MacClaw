@@ -28,3 +28,4 @@ jobs:
       - run: npm run build
       - run: npm run rust:fmt:check
       - run: npm run rust:clippy
+      - run: npm run rust:test
