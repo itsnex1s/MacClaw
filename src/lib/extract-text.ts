@@ -14,9 +14,10 @@ export function parseFrame(raw: string): JsonMap | null {
 }
 
 /**
- * Like extractText but preserves image content blocks as inline markers:
- * <!--INLINE_IMAGE:media_type:base64_data-->
- * These markers flow through the text pipeline and get parsed at render time.
+ * Like extractText but preserves image content blocks as markers that flow
+ * through the text pipeline and get parsed at render time:
+ * <!--ARTIFACT_IMAGE:artifact_id:mime--> for gateway-managed artifacts and
+ * <!--INLINE_IMAGE:media_type:base64_data--> for inline base64 images.
  */
 export function extractTextWithMedia(input: unknown): string {
   if (typeof input === "string") {
@@ -35,6 +36,22 @@ export function extractTextWithMedia(input: unknown): string {
 
       if (block.type === "text" && typeof block.text === "string") {
         parts.push(block.text);
+        continue;
+      }
+
+      // Managed images carry an artifactId; the bytes come from artifacts.download.
+      if (
+        block.type === "image" &&
+        typeof block.artifactId === "string" &&
+        block.artifactId
+      ) {
+        const mime =
+          typeof block.mimeType === "string"
+            ? block.mimeType
+            : typeof block.mediaType === "string"
+              ? block.mediaType
+              : "image/png";
+        parts.push(`<!--ARTIFACT_IMAGE:${block.artifactId}:${mime}-->`);
         continue;
       }
 

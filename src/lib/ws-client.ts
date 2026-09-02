@@ -112,6 +112,10 @@ export class WsClient {
     return this.sessionKey;
   }
 
+  get gatewayUrl(): string {
+    return this.lastSettings?.gatewayUrl ?? "";
+  }
+
   get lastFailure(): ConnectFailure | null {
     return this.handshakeFailure;
   }

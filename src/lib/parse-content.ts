@@ -5,6 +5,7 @@ export interface TextSegment {
   value: string;
 }
 
+/** Legacy `MEDIA:/path` line; the gateway no longer serves local paths. */
 export interface MediaSegment {
   kind: "media";
   filePath: string;
@@ -17,15 +18,25 @@ export interface InlineImageSegment {
   base64: string;
 }
 
-export type ContentSegment = TextSegment | MediaSegment | InlineImageSegment;
+/** Gateway-managed image, downloaded through artifacts.download. */
+export interface ArtifactImageSegment {
+  kind: "artifact-image";
+  artifactId: string;
+  mimeType: string;
+}
+
+export type ContentSegment =
+  TextSegment | MediaSegment | InlineImageSegment | ArtifactImageSegment;
 
 const MEDIA_RE = /^\s*MEDIA:\s*(\S+)/;
 const INLINE_IMAGE_RE = /^<!--INLINE_IMAGE:([^:]+):(.+)-->$/;
+const ARTIFACT_IMAGE_RE = /^<!--ARTIFACT_IMAGE:([^:]+):(.+)-->$/;
 
 /**
  * Parse raw response text into renderable segments.
  * - Strips ```tool_code blocks (complete + unclosed trailing)
  * - Extracts MEDIA: /path lines into MediaSegments
+ * - Extracts <!--ARTIFACT_IMAGE:id:mime--> markers into ArtifactImageSegments
  * - Extracts <!--INLINE_IMAGE:mime:base64--> markers into InlineImageSegments
  * - Keeps remaining text as TextSegments
  */
@@ -50,6 +61,17 @@ export function parseContent(raw: string): ContentSegment[] {
   };
 
   for (const line of cleaned.split("\n")) {
+    const artifactMatch = line.match(ARTIFACT_IMAGE_RE);
+    if (artifactMatch) {
+      flushText();
+      segments.push({
+        kind: "artifact-image",
+        artifactId: artifactMatch[1],
+        mimeType: artifactMatch[2],
+      });
+      continue;
+    }
+
     const inlineMatch = line.match(INLINE_IMAGE_RE);
     if (inlineMatch) {
       flushText();

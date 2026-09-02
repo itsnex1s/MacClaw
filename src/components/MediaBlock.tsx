@@ -1,26 +1,26 @@
 import { useCallback, useState } from "react";
 import type { WsClient } from "../lib/ws-client";
-import { getMediaUrl, getMediaCacheEntry } from "../lib/media-cache";
-import { mediaKind, fileNameFromPath } from "../lib/media-types";
+import { getArtifactUrl, getMediaCacheEntry } from "../lib/media-cache";
+import { fileNameFromPath } from "../lib/media-types";
 
-interface MediaBlockProps {
-  filePath: string;
+interface ArtifactImageProps {
+  artifactId: string;
   mimeType: string;
   client: WsClient;
 }
 
-export function MediaBlock({ filePath, mimeType, client }: MediaBlockProps) {
+/** Image produced by the agent; bytes arrive through artifacts.download. */
+export function ArtifactImage({ artifactId, mimeType, client }: ArtifactImageProps) {
   const [, setTick] = useState(0);
   const forceUpdate = useCallback(() => setTick((t) => t + 1), []);
 
-  const url = getMediaUrl(client, filePath, mimeType, forceUpdate);
-  const entry = getMediaCacheEntry(filePath);
-  const kind = mediaKind(mimeType);
+  const url = getArtifactUrl(client, artifactId, mimeType, forceUpdate);
+  const entry = getMediaCacheEntry(artifactId);
 
   if (entry?.state === "error") {
     return (
       <div className="media-block media-block--error">
-        Failed to load: {fileNameFromPath(filePath)}
+        Failed to load image: {entry.message}
       </div>
     );
   }
@@ -33,43 +33,24 @@ export function MediaBlock({ filePath, mimeType, client }: MediaBlockProps) {
     );
   }
 
-  if (kind === "image") {
-    return (
-      <div className="media-block">
-        <img
-          src={url}
-          alt={fileNameFromPath(filePath)}
-          className="media-block--image"
-        />
-      </div>
-    );
-  }
-
-  if (kind === "audio") {
-    return (
-      <div className="media-block media-block--audio">
-        <audio controls preload="none">
-          <source src={url} type={mimeType} />
-        </audio>
-      </div>
-    );
-  }
-
-  if (kind === "video") {
-    return (
-      <div className="media-block media-block--video">
-        <video controls preload="metadata" className="media-video">
-          <source src={url} type={mimeType} />
-        </video>
-      </div>
-    );
-  }
-
   return (
     <div className="media-block">
-      <a href={url} download={fileNameFromPath(filePath)} className="media-file-link">
+      <img src={url} alt="Generated image" className="media-block--image" />
+    </div>
+  );
+}
+
+interface LegacyMediaProps {
+  filePath: string;
+}
+
+/** A legacy `MEDIA:/path` line: the gateway no longer serves local files, so show the name. */
+export function LegacyMedia({ filePath }: LegacyMediaProps) {
+  return (
+    <div className="media-block">
+      <span className="media-file-link" title={filePath}>
         {fileNameFromPath(filePath)}
-      </a>
+      </span>
     </div>
   );
 }

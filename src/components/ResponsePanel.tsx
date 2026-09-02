@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import type { WsClient } from "../lib/ws-client";
 import { parseContent } from "../lib/parse-content";
-import { MediaBlock, InlineImage } from "./MediaBlock";
+import { ArtifactImage, InlineImage, LegacyMedia } from "./MediaBlock";
 
 type ResponsePanelProps = {
   activeQuery: string;
@@ -129,15 +129,18 @@ export const ResponsePanel = forwardRef<HTMLElement, ResponsePanelProps>(
                 if (seg.kind === "text") {
                   return <MarkdownBlock key={i}>{seg.value}</MarkdownBlock>;
                 }
-                if (seg.kind === "media") {
+                if (seg.kind === "artifact-image") {
                   return (
-                    <MediaBlock
+                    <ArtifactImage
                       key={i}
-                      filePath={seg.filePath}
+                      artifactId={seg.artifactId}
                       mimeType={seg.mimeType}
                       client={client}
                     />
                   );
+                }
+                if (seg.kind === "media") {
+                  return <LegacyMedia key={i} filePath={seg.filePath} />;
                 }
                 if (seg.kind === "inline-image") {
                   return (
